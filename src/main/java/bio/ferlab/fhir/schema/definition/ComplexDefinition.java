@@ -47,7 +47,8 @@ public class ComplexDefinition extends BaseDefinition {
         for (Iterator<Map.Entry<String, JsonNode>> it = getDefinition().get(Constant.PROPERTIES).fields(); it.hasNext(); ) {
             Map.Entry<String, JsonNode> node = it.next();
 
-            if (node.getKey().contains("_") || node.getKey().equals(Constant.EXTENSION) || UNSUPPORTED_PROPERTIES.contains(node.getKey())) {
+            if (node.getKey().equals(Constant.EXTENSION) || UNSUPPORTED_PROPERTIES.contains(node.getKey())) {
+            // if (node.getKey().contains("_") || node.getKey().equals(Constant.EXTENSION) || UNSUPPORTED_PROPERTIES.contains(node.getKey())) {
                 continue;
             }
 

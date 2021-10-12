@@ -94,7 +94,7 @@ public class FhavroConverterTest {
     @Test
     public void test_serialize_ncpi_condition_disease_example_1() {
         Condition condition = loadExampleFromFile("ncpi-Disease-example-1.json", Condition.class);
-        assertBaseResource("ncpi-disease", condition, Condition.class);
+        assertBaseResource("Condition", condition, Condition.class);
     }
 
     @Test

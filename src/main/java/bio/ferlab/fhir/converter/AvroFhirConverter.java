@@ -6,12 +6,10 @@ import bio.ferlab.fhir.schema.utils.Constant;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.util.TerserUtilHelper;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericRecord;
 import org.hl7.fhir.instance.model.api.IBase;
-import org.hl7.fhir.r4.model.Base;
-import org.hl7.fhir.r4.model.BaseResource;
-import org.hl7.fhir.r4.model.Narrative;
-import org.hl7.fhir.r4.model.Property;
+import org.hl7.fhir.r4.model.*;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -23,10 +21,18 @@ import static bio.ferlab.fhir.converter.ConverterUtils.navigatePath;
 
 public class AvroFhirConverter {
 
+    // Pre-record the Schema for an Element
+    private static Schema elementSchema;
+
     private AvroFhirConverter() {
     }
 
     public static <T extends BaseResource> T readGenericRecord(GenericRecord genericRecord, Schema schema, Class<T> type) {
+        schema.getFields().stream()
+                .filter(x -> x.name().startsWith("_"))
+                .findFirst()
+                .ifPresent(x -> elementSchema = x.schema());
+
         ResourceContext resourceContext = new ResourceContext(TerserUtilHelper.newHelper(FhirContext.forR4(), type.getSimpleName()));
         read(resourceContext, null, schema, genericRecord);
         return resourceContext.getHelper().getResource();
@@ -70,6 +76,12 @@ public class AvroFhirConverter {
         GenericRecord genericRecord = (GenericRecord) value;
         for (Schema.Field innerField : schema.getFields()) {
             if (Constant.RESOURCE_TYPE.equalsIgnoreCase(innerField.name())) {
+                continue;
+            }
+
+            if (innerField.name().contains("_")) {
+                // TODO record private fields into the BaseResource.
+
                 continue;
             }
 
@@ -152,6 +164,26 @@ public class AvroFhirConverter {
                 return;
             default:
                 readType(context, value.toString());
+        }
+    }
+
+    protected static void readElement(ResourceContext context, Schema schema, Object values) {
+        if (((List<?>) values).isEmpty()) {
+            context.getPath().removeLast();
+            return;
+        }
+
+        ElementDefinition elementDefinition = (ElementDefinition) values;
+        System.out.println("sdfsd'");
+
+        String absolutePath = navigatePath(context.getPath()).replace("_", "");
+        Property property = context.getResource().getNamedProperty(absolutePath);
+
+
+        for (Object value : (List<?>) values) {
+            GenericRecord genericRecord = (GenericRecord) value;
+            Object object = genericRecord.get("url");
+            System.out.println("Here!");
         }
     }
 

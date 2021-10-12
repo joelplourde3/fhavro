@@ -10,10 +10,15 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.commons.text.WordUtils;
+import org.checkerframework.checker.nullness.Opt;
+import org.hl7.fhir.exceptions.FHIRException;
 import org.hl7.fhir.r4.model.Base;
 import org.hl7.fhir.r4.model.BaseResource;
+import org.hl7.fhir.r4.model.ElementDefinition;
 import org.hl7.fhir.r4.model.Property;
+import org.junit.platform.commons.util.StringUtils;
 
+import javax.swing.text.html.Option;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -27,10 +32,18 @@ public class FhirAvroConverter {
             new DateTimeConverter()
     );
 
+    // Pre-record the Schema for an Element
+    private static Schema elementSchema;
+
     private FhirAvroConverter() {
     }
 
     public static GenericData.Record readResource(BaseResource baseResource, Schema schema) {
+        schema.getFields().stream()
+                .filter(x -> x.name().startsWith("_"))
+                .findFirst()
+                .ifPresent(x -> elementSchema = x.schema());
+
         Object object = FhirAvroConverter.read(schema, Arrays.asList(baseResource));
         GenericData.Record genericRecord = (GenericData.Record) object;
         genericRecord.put(Constant.RESOURCE_TYPE, schema.getName());
@@ -91,7 +104,9 @@ public class FhirAvroConverter {
         List<Object> objects = new ArrayList<>();
 
         for (Base base : bases) {
-            objects.add(read(schema.getElementType(), Collections.singletonList(base)));
+            Schema elementType = schema.getElementType();
+
+            objects.add(read(elementType, Collections.singletonList(base)));
         }
 
         return objects;
@@ -114,6 +129,11 @@ public class FhirAvroConverter {
 
     protected static <T> Object readType(List<Base> bases, Function<String, T> function) {
         Base base = ConverterUtils.getBase(bases);
+
+        if (base.primitiveValue() == null) {
+            return null;
+        }
+
         String value = formatPrimitiveValue(base.primitiveValue());
         try {
             return function.apply(value);
@@ -155,6 +175,17 @@ public class FhirAvroConverter {
             }
         }
 
+        if (field.name().startsWith("_") && field.name().equals("_recordedDate")) {
+            Property test = base.getNamedProperty(field.name().replace("_", ""));
+            if (test.hasValues()) {
+                Base innerBase = ConverterUtils.getBase(test.getValues());
+                if (innerBase.primitiveValue() == null) {
+                    Property extensionProperty = innerBase.getNamedProperty("extension");
+                    return Optional.of(extensionProperty);
+                }
+            }
+        }
+
         property = base.getNamedProperty(WordUtils.uncapitalize(field.name()));
         if (property != null) {
             return Optional.of(property);
@@ -165,6 +196,7 @@ public class FhirAvroConverter {
                 return Optional.of(children);
             }
         }
+
         return Optional.empty();
     }
 
